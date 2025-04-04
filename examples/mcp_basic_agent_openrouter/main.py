@@ -66,9 +66,16 @@ async def example_usage():
             logger.info(f"Paragraph as a tweet: {result}")
 
 if __name__ == "__main__":
-    start = time.time()
-    process = asyncio.run(example_usage(),debug=True)
-    end = time.time()
-    t = end - start
 
-    print(f"Total run time: {t:.2f}s")
+    async def main():
+        try:
+            start = time.time()
+            await example_usage()
+            end = time.time()
+            t = end - start
+
+            print(f"Total run time: {t:.2f}s")
+        finally:
+            pass
+
+    asyncio.run(main())
