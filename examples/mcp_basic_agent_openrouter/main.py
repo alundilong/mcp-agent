@@ -69,6 +69,7 @@ if __name__ == "__main__":
 
     async def main():
         try:
+            await app.initialize()
             start = time.time()
             await example_usage()
             end = time.time()
