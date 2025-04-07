@@ -10,12 +10,12 @@ from mcp_agent.workflows.llm.augmented_llm_openrouter_deepseek import (
     DeepSeekAugmentedLLM,
 )
 
-# Set Streamlit page config
+# --- Streamlit Page Setup ---
 st.set_page_config(page_title="MCP Chatbot", layout="wide")
 st.title("🤖 MCP Agent Chatbot")
 
 
-# MCP app initialization (do this once)
+# --- MCP App Initialization ---
 @st.cache_resource
 def initialize_mcp_app():
     app = MCPApp(name="mcp_basic_agent_openrouter")
@@ -25,58 +25,86 @@ def initialize_mcp_app():
 
 app = initialize_mcp_app()
 
-
-# Function to handle a single user prompt
-async def handle_prompt(prompt):
-    async with app.run() as agent_app:
-        context = agent_app.context
-        context.config.mcp.servers["filesystem"].args.extend([os.getcwd()])
-
-        agent = Agent(
-            name="finder",
-            instruction="""You are an agent with access to the filesystem and can fetch URLs.
-            Answer user questions using your tools and return content and file info as needed.""",
-            server_names=["fetch", "filesystem"],
-        )
-
-        async with agent:
-            llm = await agent.attach_llm(DeepSeekAugmentedLLM)
-            response = await llm.generate_str(
-                message=prompt,
-                request_params=RequestParams(
-                    modelPreferences=ModelPreferences(
-                        costPriority=0.1,
-                        speedPriority=0.2,
-                        intelligencePriority=0.7,
-                    )
-                ),
-            )
-            return response
-
-
-# Initialize session state for message history
+# --- Session State Init ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "is_generating" not in st.session_state:
+    st.session_state.is_generating = False
+if "cancel_requested" not in st.session_state:
+    st.session_state.cancel_requested = False
+if "latest_input" not in st.session_state:
+    st.session_state.latest_input = ""
 
-# Display existing chat history
+
+# --- Async LLM Call ---
+async def generate_response(prompt):
+    try:
+        async with app.run() as agent_app:
+            context = agent_app.context
+            context.config.mcp.servers["filesystem"].args.extend([os.getcwd()])
+
+            agent = Agent(
+                name="finder",
+                instruction="""You are an agent with access to the filesystem and can fetch URLs.
+                Answer user questions using your tools and return content and file info as needed.""",
+                server_names=["fetch", "filesystem"],
+            )
+
+            async with agent:
+                llm = await agent.attach_llm(DeepSeekAugmentedLLM)
+                response = await llm.generate_str(
+                    message=prompt,
+                    request_params=RequestParams(
+                        modelPreferences=ModelPreferences(
+                            costPriority=0.1,
+                            speedPriority=0.2,
+                            intelligencePriority=0.7,
+                        )
+                    ),
+                )
+                return response
+    except asyncio.CancelledError:
+        return "*[Response cancelled by user]*"
+
+
+# --- User Input Trigger ---
+user_input = st.chat_input("Type your message...")
+
+if user_input and not st.session_state.is_generating:
+    st.session_state.latest_input = user_input
+    st.session_state.chat_history.append({"role": "user", "content": user_input})
+    st.session_state.is_generating = True
+    st.session_state.cancel_requested = False
+    st.rerun()
+
+
+# --- Display Chat History ---
 for entry in st.session_state.chat_history:
     with st.chat_message(entry["role"]):
         st.markdown(entry["content"])
 
-# Chat input field (always shows up)
-user_input = st.chat_input("Type your message...")
 
-# Process input and update chat
-if user_input:
-    # Show user message
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
+# --- Assistant Response Generation / Cancel Block ---
+if st.session_state.is_generating:
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            response = asyncio.run(handle_prompt(user_input))
-            st.markdown(response)
+        spinner = st.empty()
+        spinner.markdown("⏳ Generating response... (press Cancel below)")
+
+    col1, _ = st.columns([1, 5])
+    with col1:
+        if st.button("❌ Cancel"):
+            st.session_state.cancel_requested = True
+            st.session_state.is_generating = False
+            st.session_state.chat_history.append(
+                {"role": "assistant", "content": "*[Cancelled by user]*"}
+            )
+            st.rerun()
+
+    if not st.session_state.cancel_requested:
+        response = asyncio.run(generate_response(st.session_state.latest_input))
+        if not st.session_state.cancel_requested:
             st.session_state.chat_history.append(
                 {"role": "assistant", "content": response}
             )
+        st.session_state.is_generating = False
+        st.rerun()
