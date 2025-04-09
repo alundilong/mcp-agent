@@ -135,6 +135,7 @@ class OpenAISettings(BaseModel):
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
+
 class OpenRouterSettings(BaseModel):
     """
     Settings for using OpenAI models in the MCP Agent application.
@@ -146,6 +147,20 @@ class OpenRouterSettings(BaseModel):
     base_url: str | None = None
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
+class OllamaSettings(BaseModel):
+    """
+    Settings for using ollama deployed models in the MCP Agent application.
+    """
+
+    api_key: str | None = None
+    reasoning_effort: Literal["low", "medium", "high"] = "medium"
+
+    base_url: str | None = None
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
 
 class AzureSettings(BaseModel):
     """
@@ -311,6 +326,9 @@ class Settings(BaseSettings):
     """Settings for using OpenAI models in the MCP Agent application"""
 
     openrouter: OpenRouterSettings | None = None
+    """Settings for using OpenAI models in the MCP Agent application"""
+
+    ollama: OllamaSettings | None = None
     """Settings for using OpenAI models in the MCP Agent application"""
 
     azure: AzureSettings | None = None
